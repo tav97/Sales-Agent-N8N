@@ -1,0 +1,154 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "A7EB8B1FD65CD323!s0f194693704f47d3afd5a464421a35ec",
+          "mode": "list",
+          "cachedResultName": "Item name oct vol",
+          "cachedResultUrl": "https://onedrive.live.com/personal/a7eb8b1fd65cd323/_layouts/15/doc.aspx?resid=0f194693-704f-47d3-afd5-a464421a35ec&cid=a7eb8b1fd65cd323"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "{00000000-0001-0000-0000-000000000000}",
+          "mode": "list",
+          "cachedResultName": "Sheet0",
+          "cachedResultUrl": "https://onedrive.live.com/personal/a7eb8b1fd65cd323/_layouts/15/doc.aspx?resid=0f194693-704f-47d3-afd5-a464421a35ec&cid=a7eb8b1fd65cd323&activeCell=Sheet0!A1"
+        },
+        "useRange": true,
+        "range": "A5:E600",
+        "keyRow": 4,
+        "dataStartRow": 5,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.2,
+      "position": [
+        4512,
+        576
+      ],
+      "id": "a9e47e0e-3847-4133-b604-dfe31bc336a9",
+      "name": "Get sheets",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "wkZ4kOiVLcje3j74",
+          "name": "Microsoft Excel account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all items from the previous node (Excel rows)\nconst items = $input.all();\n\n// Process each row dynamically and cleanly\nreturn items.map(item => {\n  const row = item.json;\n  const keys = Object.keys(row);\n\n  // Identify text based columns\n  const textColumns = keys.filter(key => typeof row[key] === 'string');\n\n  // Extract distributor and item name based on first two text columns\n  const distributor = textColumns[0] ? row[textColumns[0]].trim() : \"\";\n  const itemName = textColumns[1] ? row[textColumns[1]].trim() : \"\";\n\n  // Identify numeric columns (should correspond to Aug, Sep, Oct)\n  const numericColumns = keys.filter(key => typeof row[key] === 'number');\n\n  const aug = numericColumns[0] ? row[numericColumns[0]] : 0;\n  const sep = numericColumns[1] ? row[numericColumns[1]] : 0;\n  const oct = numericColumns[2] ? row[numericColumns[2]] : 0;\n\n  return {\n    json: {\n      distributor,\n      itemName,\n      aug,\n      sep,\n      oct\n    }\n  };\n});\n"
+      },
+      "id": "221e7916-61a0-44c9-a777-1cd7b84f5bb5",
+      "name": "Process Excel Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "salesData",
+        "options": {}
+      },
+      "id": "c0b48a37-54d7-4efa-8d46-916925c523ea",
+      "name": "Combine Sales Data",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        4960,
+        576
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "ecaf95b4-ec99-40cd-a6f2-963866792043",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        4288,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get combined sales data from previous node\nconst items = $input.all();\nconst salesData = items[0].json.salesData || [];\n\n// Aggregate sales by distributor\nconst distributorSales = {};\nsalesData.forEach(item => {\n  const dist = item.distributor || \"Unknown Distributor\";\n  if (!distributorSales[dist]) {\n    distributorSales[dist] = { aug: 0, sep: 0, oct: 0 };\n  }\n  distributorSales[dist].aug += item.aug || 0;\n  distributorSales[dist].sep += item.sep || 0;\n  distributorSales[dist].oct += item.oct || 0;\n});\n\n// Aggregate total sales by item\nconst itemSales = {};\nsalesData.forEach(item => {\n  const name = item.itemName || \"Unknown Item\";\n  const total = (item.aug || 0) + (item.sep || 0) + (item.oct || 0);\n  itemSales[name] = (itemSales[name] || 0) + total;\n});\n\n// Create formatted distributor table\nlet distributorTable = \"Sales by Distributor\\n\";\ndistributorTable += \"Distributor | Aug | Sep | Oct\\n\";\ndistributorTable += \"----------------------------------------\\n\";\n\nfor (const [dist, sales] of Object.entries(distributorSales)) {\n  distributorTable += `${dist} | ${sales.aug.toFixed(2)} | ${sales.sep.toFixed(2)} | ${sales.oct.toFixed(2)}\\n`;\n}\n\n// Create formatted item table\nlet itemTable = \"\\n\\nSales by Item\\n\";\nitemTable += \"Item Name | Total Sales\\n\";\nitemTable += \"----------------------------------------\\n\";\n\nfor (const [item, total] of Object.entries(itemSales)) {\n  itemTable += `${item} | ${total.toFixed(2)}\\n`;\n}\n\n// Return summary object\nreturn [\n  {\n    json: {\n      summary: distributorTable + itemTable,\n      distributorSales,\n      itemSales,\n      totalRecords: salesData.length\n    }\n  }\n];\n"
+      },
+      "id": "e816d4c7-2ed6-489a-af81-73a7a48feec1",
+      "name": "Calculate Sales Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5184,
+        576
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Get sheets": {
+      "main": [
+        [
+          {
+            "node": "Process Excel Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Excel Data": {
+      "main": [
+        [
+          {
+            "node": "Combine Sales Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Sales Data": {
+      "main": [
+        [
+          {
+            "node": "Calculate Sales Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Get sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4a1c43f5-25f0-4dd1-9e7a-69f5199d7734",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f368db8aa40cb80c1c9f2c312f28c0c6c1f2010239fe242f0bc58baa8affbe8b"
+  },
+  "id": "pDvL9AA3PzZpE0Iw",
+  "tags": []
+}
